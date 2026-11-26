@@ -31,20 +31,25 @@ Selain itu, bila **`APP_KUNCI`** diatur (lihat `ExamBrowser-kunci\APP_KUNCI-BACA
 
 1. Buat repo baru di GitHub, misalnya **`cbt-exambrowser`** (boleh **Private**).
 2. Unggah isi folder `ExamBrowser` ke repo itu: folder **`android`**, folder **`windows`**, dan berkas **`logo.png`**,
-   **`buat-ikon.py`**, `README.md`, `.gitignore` (*Add file → Upload files*, seret semuanya sekaligus).
-   Lalu buat resep pembangunnya: *Add file → Create new file* → ketik nama berkas
-   **`.github/workflows/bangun.yml`** → salin-tempel isi berkas `.github/workflows/bangun.yml` dari paket ini → *Commit changes*. Buat juga
-   **`.github/workflows/ikon.yml`** (pembuat ikon otomatis) dengan cara yang sama.
+   **`buat-ikon.py`**, **`bangun.yml`**, `README.md` (*Add file → Upload files*, seret semuanya sekaligus).
+   **Penting:** unggahan lewat web GitHub **melewati folder berawalan titik** (`.github`), jadi resep pembangunnya
+   harus dibuat sendiri: *Add file → Create new file* → ketik nama berkas **`.github/workflows/bangun.yml`** →
+   salin-tempel **seluruh isi berkas `bangun.yml`** (yang di akar folder ini) → *Commit changes*.
+   Tanda berhasil: tab **Actions** menampilkan **Bangun aplikasi CBT Ujian** (bukan halaman "Get started").
 3. Isi **Secret** di repo → **Settings → Secrets and variables → Actions → New repository secret**:
-   - `APP_KUNCI` → isi dengan teks berkas `ExamBrowser-kunci\APP_KUNCI.txt`. **Wajib** agar halaman ujian hanya
-     bisa dibuka lewat aplikasi ini. Kunci yang sama harus diatur di server (`npx wrangler secret put APP_KUNCI`).
-     Lihat `ExamBrowser-kunci\APP_KUNCI-BACA.md`. (Boleh dikosongkan dulu untuk uji coba; aktifkan sebelum dibagikan.)
+   - `APP_KUNCI` → kunci link, **sama persis** dengan `APP_KUNCI` di serverC (Settings → Variables and Secrets
+     aplikasi server). Teksnya ada di `ExamBrowser-kunci\APP_KUNCI.txt`. Tempel tanpa spasi/enter. **Wajib**.
    - `KEYSTORE_BASE64` → isi dengan seluruh teks berkas `ExamBrowser-kunci\KEYSTORE_BASE64.txt` *(disarankan)*
    - `KEYSTORE_PASSWORD` → isi dengan teks berkas `ExamBrowser-kunci\KEYSTORE_PASSWORD.txt` *(disarankan)*
 
    Tanpa KEYSTORE, APK tetap jadi, tetapi setiap pembaruan aplikasi harus menghapus aplikasi lama di HP dulu.
+   Sebaiknya repo dijadikan **Private** (Settings → General → Danger Zone → Change visibility): hasil .apk/.exe
+   memuat kunci link, dan hasil pembangunan di repo publik bisa diunduh siapa pun yang punya akun GitHub.
 4. Buka tab **Actions** → **Bangun aplikasi CBT Ujian** → **Run workflow** → isi **alamat yang dibuka aplikasi**:
-   link blog sekolah (contoh `https://namasekolah.blogspot.com`) atau langsung `https://…/ujian-cbt/` → **Run workflow**.
+   sebaiknya langsung `https://…/ujian-cbt/` (contoh `https://css.afamir19.my.id/ujian-cbt/`) → **Run workflow**.
+   Langkah pertama, **Periksa alamat & kunci link**, mencocokkan alamat dan `APP_KUNCI` dengan server. Bila merah,
+   bacalah pesannya (alamat salah / `APP_KUNCI` kosong / `APP_KUNCI` berbeda dengan serverC), perbaiki, lalu jalankan lagi.
+   Aplikasi yang pasti ditolak server tidak akan dibangun.
 5. Tunggu ±5–10 menit sampai kedua pekerjaan berwarna hijau. Buka hasilnya, lalu di bagian **Artifacts** unduh:
    - **CBT-Ujian-android** → berisi `CBT-Ujian.apk`
    - **CBT-Ujian-windows** → berisi `CBT-Ujian.exe`
@@ -129,8 +134,7 @@ Ikon aplikasi diambil dari berkas **`logo.png`** di folder ini (boleh juga `logo
 
 1. Timpa `logo.png` dengan logo baru. Sebaiknya minimal 512 px, berlatar putih atau transparan.
 2. Unggah `logo.png` itu ke repo `cbt-exambrowser` (*Add file → Upload files*, timpa yang lama) lalu *Commit*.
-3. Selesai. Workflow **Perbarui ikon dari logo** (`ikon.yml`) berjalan sendiri dan menyimpan ikon Android & Windows yang baru ke repo.
-4. Untuk mendapat .apk/.exe baru: **Actions → Bangun aplikasi CBT Ujian → Run workflow**. Ikon dibuat ulang dari `logo.png` lagi saat membangun, jadi pasti mengikuti logo terbaru.
+3. **Actions → Bangun aplikasi CBT Ujian → Run workflow**. Ikon .apk dan .exe dibuat ulang dari `logo.png` saat membangun.
 
 Yang dikerjakan otomatis oleh `buat-ikon.py` saat membangun:
 - Latar putih **di luar** logo dibuat transparan (putih di dalam logo tetap). Logo yang sudah transparan dipakai apa adanya.
@@ -151,8 +155,7 @@ Ingin melihat hasil ikonnya di komputer sendiri sebelum membangun (tidak wajib):
 |---|---|
 | `android/` | proyek Android (Java, tanpa pustaka tambahan) — bisa juga dibuka di Android Studio |
 | `windows/` | proyek Windows (C#, WinForms + WebView2, .NET Framework 4.8) — bisa juga dibuka di Visual Studio |
-| `.github/workflows/bangun.yml` | resep GitHub Actions yang membangun .apk dan .exe |
-| `.github/workflows/ikon.yml` | memperbarui ikon otomatis setiap `logo.png` diganti |
+| `bangun.yml` | resep GitHub Actions yang memeriksa kunci link lalu membangun .apk dan .exe (di repo disimpan sebagai `.github/workflows/bangun.yml`) |
 | `logo.png` | logo sekolah → ikon .apk dan .exe (ganti kapan saja) |
 | `buat-ikon.py` | pembuat ikon dari `logo.png`, dijalankan otomatis saat membangun |
 
