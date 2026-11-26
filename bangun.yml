@@ -2,6 +2,8 @@
 # Jalankan dari tab Actions → "Bangun aplikasi CBT Ujian" → Run workflow → isi alamat yang dibuka aplikasi.
 # Hasil: bagian "Artifacts" di halaman hasil (CBT-Ujian-android berisi .apk, CBT-Ujian-windows berisi .exe).
 # Ikon kedua aplikasi dibuat otomatis dari logo.png (di akar repo) oleh buat-ikon.py.
+# Sebelum membangun, alamat & kunci link (secret APP_KUNCI) dicocokkan dulu dengan server ujian. Bila tidak cocok,
+# pembangunan dihentikan dengan pesan yang jelas, jadi aplikasi yang pasti ditolak server tidak pernah dibagikan.
 name: Bangun aplikasi CBT Ujian
 
 on:
@@ -16,8 +18,49 @@ permissions:
   contents: read
 
 jobs:
+  periksa:
+    name: Periksa alamat & kunci link
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cocokkan dengan server ujian
+        env:
+          ALAMAT: ${{ inputs.alamat }}
+          APP_KUNCI: ${{ secrets.APP_KUNCI }}
+        run: |
+          A="$(printf '%s' "$ALAMAT" | tr -d '[:space:]')"
+          K="$(printf '%s' "$APP_KUNCI" | tr -d '[:space:]')"
+          case "$A" in
+            https://*) ;;
+            *) echo "::error::Alamat harus diawali https:// (sekarang: $A)"; exit 1 ;;
+          esac
+          case "$A" in
+            *"/ujian-cbt"*) ;;
+            *) echo "::notice::Alamat bukan …/ujian-cbt/ (mis. link blog sekolah): kecocokan kunci link tidak bisa diperiksa di sini."; exit 0 ;;
+          esac
+          UA="Mozilla/5.0 (Linux) CBTUjian/periksa (Linux)"
+          [ -n "$K" ] && UA="$UA k/$K"
+          kode=$(curl -sL -o halaman.html -w '%{http_code}' --max-time 40 -A "$UA" "$A" || true)
+          tanpa=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 40 -A "Mozilla/5.0 (Linux)" "$A" || true)
+          if [ "$kode" = "200" ]; then
+            if [ "$tanpa" = "200" ]; then
+              echo "::warning::Server menerima halaman ujian tanpa kunci link (Kunci link OFF di Pengaturan, atau APP_KUNCI di serverC kosong). Aplikasi tetap bisa dipakai."
+            fi
+            echo "Alamat & kunci link cocok dengan server: $A"
+            exit 0
+          fi
+          if [ "$kode" = "000" ]; then echo "::error::Alamat $A tidak bisa dihubungi. Periksa ejaan alamat."; exit 1; fi
+          if [ "$kode" = "404" ] && grep -q "Kode K0" halaman.html; then
+            echo "::error::Secret APP_KUNCI di repo ini belum diisi, padahal server memakai kunci link. Isi Settings → Secrets and variables → Actions → APP_KUNCI sama persis dengan APP_KUNCI di serverC, lalu jalankan lagi."; exit 1
+          fi
+          if [ "$kode" = "404" ] && grep -q "Kode K1" halaman.html; then
+            echo "::error::Kunci link tidak cocok: secret APP_KUNCI di repo ini BERBEDA dengan APP_KUNCI di serverC. Samakan keduanya (tempel tanpa spasi/enter), lalu jalankan lagi."; exit 1
+          fi
+          if [ "$kode" = "404" ]; then echo "::error::Halaman $A tidak ditemukan (404). Pastikan alamat diakhiri /ujian-cbt/ dan server sudah versi 2.19.1 atau lebih baru."; exit 1; fi
+          echo "::error::Server menjawab kode $kode untuk $A."; exit 1
+
   android:
     name: Android (.apk)
+    needs: periksa
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +121,7 @@ jobs:
 
   windows:
     name: Windows (.exe)
+    needs: periksa
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
