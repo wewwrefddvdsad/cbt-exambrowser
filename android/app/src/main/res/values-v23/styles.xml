@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 6+: bilah status putih dengan ikon gelap, menyatu dengan kepala halaman ujian -->
+    <style name="Tema" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#2A5C8A</item>
+        <item name="android:colorPrimaryDark">#FFFFFF</item>
+        <item name="android:colorAccent">#2A5C8A</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#1F4A72</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

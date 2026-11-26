@@ -1,0 +1,112 @@
+# Membangun aplikasi CBT Ujian: Android (.apk) dan Windows (.exe).
+# Jalankan dari tab Actions → "Bangun aplikasi CBT Ujian" → Run workflow → isi alamat yang dibuka aplikasi.
+# Hasil: bagian "Artifacts" di halaman hasil (CBT-Ujian-android berisi .apk, CBT-Ujian-windows berisi .exe).
+# Ikon kedua aplikasi dibuat otomatis dari logo.png (di akar repo) oleh buat-ikon.py.
+name: Bangun aplikasi CBT Ujian
+
+on:
+  workflow_dispatch:
+    inputs:
+      alamat:
+        description: "Alamat yang dibuka aplikasi: link blog sekolah (contoh: https://namasekolah.blogspot.com) atau https://…/ujian-cbt/"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Buat ikon aplikasi dari logo.png
+        run: |
+          pip install --quiet pillow numpy
+          python buat-ikon.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Siapkan Android SDK (sudah terpasang di mesin GitHub)
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "Android SDK: $SDK"
+          ls "$SDK/platforms" || true
+          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKM" ]; then
+            yes | "$SDKM" --licenses > /dev/null || true
+          fi
+          echo "sdk.dir=$SDK" > android/local.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Kunci tanda tangan APK (opsional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/cbt-ujian.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/cbt-ujian.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secret KEYSTORE_BASE64 belum diisi. APK ditandatangani kunci sementara: untuk memasang versi berikutnya, aplikasi lama harus dihapus dulu."
+          fi
+
+      - name: Bangun APK
+        env:
+          ALAMAT: ${{ inputs.alamat }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          APP_KUNCI: ${{ secrets.APP_KUNCI }}
+        run: gradle -p android assembleRelease "-PalamatUjian=$ALAMAT" "-PappKunci=$APP_KUNCI" --no-daemon --stacktrace
+
+      - run: cp android/app/build/outputs/apk/release/app-release.apk CBT-Ujian.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CBT-Ujian-android
+          path: CBT-Ujian.apk
+
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Buat ikon aplikasi dari logo.png
+        run: |
+          pip install --quiet pillow numpy
+          python buat-ikon.py
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Bangun EXE
+        shell: pwsh
+        env:
+          ALAMAT: ${{ inputs.alamat }}
+          APP_KUNCI: ${{ secrets.APP_KUNCI }}
+        run: dotnet build windows/CBTUjian.csproj -c Release "-p:AlamatUjian=$env:ALAMAT" "-p:AppKunci=$env:APP_KUNCI"
+
+      - name: Ambil exe
+        shell: pwsh
+        run: Copy-Item windows/bin/Release/net48/CBT-Ujian.exe CBT-Ujian.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CBT-Ujian-windows
+          path: CBT-Ujian.exe

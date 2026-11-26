@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palet "biru teduh" (sama dengan halaman ujian siswa) -->
+    <color name="ikon_latar">#2A5C8A</color>
+    <!-- Android 5.0–5.1: ikon bilah status selalu putih → bilah berwarna biru gelap -->
+    <style name="Tema" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#2A5C8A</item>
+        <item name="android:colorPrimaryDark">#1F4A72</item>
+        <item name="android:colorAccent">#2A5C8A</item>
+        <item name="android:statusBarColor">#1F4A72</item>
+        <item name="android:navigationBarColor">#1F4A72</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

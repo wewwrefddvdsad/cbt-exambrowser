@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CBT Ujian</string>
+    <!-- alamat_ujian diisi saat membangun (app/build.gradle) -->
+</resources>

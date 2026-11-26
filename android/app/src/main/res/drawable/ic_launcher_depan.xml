@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo sekolah. Gambarnya ada di drawable-*dpi/ikon_sekolah.png (kanvas 108dp, perisai di dalam area aman 66dp
+     sehingga tidak terpotong oleh bentuk ikon HP mana pun: bulat, kotak membulat, atau tetesan). -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ikon_sekolah"
+    android:antialias="true"
+    android:filter="true" />

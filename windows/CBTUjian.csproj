@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    CBT Ujian untuk Windows (seperti exambrowser): WinForms + Microsoft Edge WebView2, .NET Framework 4.8
+    (sudah ada di Windows 10/11). Hasilnya SATU berkas CBT-Ujian.exe (pustaka WebView2 disatukan ke dalamnya).
+    Bangun:  dotnet build -c Release -p:AlamatUjian=https://alamat-sekolah/ujian-cbt/
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>CBT-Ujian</AssemblyName>
+    <RootNamespace>CBTUjian</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <ApplicationIcon>ikon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.4.0</Version>
+    <Product>CBT Ujian</Product>
+    <Company>CBT Sekolah</Company>
+    <Copyright> </Copyright>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AlamatUjian Condition="'$(AlamatUjian)' == ''">https://example/ujian-cbt/</AlamatUjian>
+    <!-- Kunci rahasia agar halaman ujian hanya bisa dibuka lewat aplikasi ini (sama dengan APP_KUNCI di server).
+         Diisi saat membangun:  -p:AppKunci=...  -->
+    <AppKunci Condition="'$(AppKunci)' == ''"></AppKunci>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" GeneratePathProperty="true" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- alamat ujian bawaan (dibaca aplikasi saat berjalan) -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>AlamatUjian</_Parameter1>
+      <_Parameter2>$(AlamatUjian)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>AppKunci</_Parameter1>
+      <_Parameter2>$(AppKunci)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- pustaka WebView2 disatukan ke dalam exe → cukup bagikan CBT-Ujian.exe -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\lib\net4*\Microsoft.Web.WebView2.Core.dll" LogicalName="lib.Microsoft.Web.WebView2.Core.dll" Visible="false" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\lib\net4*\Microsoft.Web.WebView2.WinForms.dll" LogicalName="lib.Microsoft.Web.WebView2.WinForms.dll" Visible="false" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll" LogicalName="native.x64.WebView2Loader.dll" Visible="false" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll" LogicalName="native.x86.WebView2Loader.dll" Visible="false" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-arm64\native\WebView2Loader.dll" LogicalName="native.arm64.WebView2Loader.dll" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="PeriksaWebView2" BeforeTargets="Build">
+    <Warning Condition="'$(PkgMicrosoft_Web_WebView2)' == ''" Text="Paket WebView2 belum dipulihkan: pustaka tidak disatukan ke exe (bagikan seluruh isi folder bin)." />
+  </Target>
+</Project>

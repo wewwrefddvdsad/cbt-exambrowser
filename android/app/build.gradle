@@ -1,0 +1,56 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Alamat halaman ujian siswa, mis. https://cbt-sekolah.namaakun.workers.dev/ujian-cbt/
+// Diisi saat membangun:  gradle assembleRelease -PalamatUjian=https://…/ujian-cbt/
+// Bila kosong, aplikasi menanyakan alamatnya sekali saat pertama dibuka.
+def alamatUjian = (project.findProperty('alamatUjian') ?: 'https://example/ujian-cbt/').toString().trim()
+
+// Kunci rahasia yang membuat halaman ujian HANYA bisa dibuka lewat aplikasi ini (sama dengan rahasia APP_KUNCI
+// di server). Diisi saat membangun:  -PappKunci=...  Harus sama persis dengan APP_KUNCI di Worker.
+def appKunci = (project.findProperty('appKunci') ?: '').toString().trim()
+
+android {
+    namespace 'id.sch.cbt.ujian'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'id.sch.cbt.ujian'
+        minSdk 21          // Android 5.0 ke atas
+        targetSdk 35       // Android 15 (berjalan juga di Android 16)
+        versionCode 3
+        versionName '1.2'
+        resValue 'string', 'alamat_ujian', alamatUjian
+        resValue 'string', 'app_kunci', appKunci
+    }
+
+    signingConfigs {
+        rilis {
+            def ks = System.getenv('KEYSTORE_FILE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS') ?: 'cbt'
+                keyPassword System.getenv('KEY_PASSWORD') ?: System.getenv('KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv('KEYSTORE_FILE') ? signingConfigs.rilis : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
