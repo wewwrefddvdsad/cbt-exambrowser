@@ -15,6 +15,7 @@ import android.graphics.PixelFormat;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -31,6 +32,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -58,7 +60,7 @@ import android.widget.TextView;
  * Isi-otomatis (autofill) & tawaran "simpan sandi" Google dimatikan untuk seluruh aplikasi.
  */
 public class MainActivity extends Activity {
-    static final String VERSI = "1.1";
+    static final String VERSI = "1.2";
     private static final String PREF = "cbt";
 
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -69,6 +71,9 @@ public class MainActivity extends Activity {
     private boolean terkunci = false;       // mode ujian
     private boolean tampil = false;         // activity sedang di depan
     private boolean halamanGagal = false;
+    private boolean gagalKini = false;      // pemuatan halaman yang sedang berjalan gagal
+    private boolean halamanSiap = false;    // halaman ujian sudah termuat
+    private int ulangOtomatis = 0;          // percobaan ulang otomatis setelah gagal (maks. 2)
     private boolean dialogTerbuka = false;
     private boolean pernahTersemat = false;
     private boolean izinDitanya = false;
@@ -184,14 +189,34 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView v, String url) { return !bolehDibuka(Uri.parse(url)); }
 
             @Override
-            public void onPageFinished(WebView v, String url) { if (url != null && url.startsWith("http")) halamanGagal = false; }
+            public void onPageStarted(WebView v, String url, android.graphics.Bitmap ikon) { if (url != null && url.startsWith("http")) gagalKini = false; }
 
             @Override
-            public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) { if (r.isForMainFrame()) tampilkanGagal(); }
+            public void onPageFinished(WebView v, String url) {
+                if (url == null || !url.startsWith("http") || gagalKini) return;
+                halamanGagal = false;
+                halamanSiap = true;
+                ulangOtomatis = 0;
+            }
+
+            @Override
+            public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+                if (r.isForMainFrame()) gagalMuat(String.valueOf(e.getDescription()));
+            }
 
             @Override
             @SuppressWarnings("deprecation")
-            public void onReceivedError(WebView v, int kode, String ket, String url) { if (Build.VERSION.SDK_INT < 23) tampilkanGagal(); }
+            public void onReceivedError(WebView v, int kode, String ket, String url) { if (Build.VERSION.SDK_INT < 23) gagalMuat(ket); }
+
+            @Override
+            public void onReceivedSslError(WebView v, SslErrorHandler hd, SslError e) {
+                hd.cancel();                                    // sertifikat tidak sah: jangan dilanjutkan
+                String hs = null;
+                try { hs = Uri.parse(e.getUrl()).getHost(); } catch (Exception x) { /* alamat tidak terbaca */ }
+                String ha = alamat == null ? null : Uri.parse(alamat).getHost();
+                // halaman ujian sendiri tidak bisa dibuka: biasanya tanggal/jam HP salah
+                if (!halamanSiap && hs != null && hs.equalsIgnoreCase(ha)) gagalMuat("sertifikat");
+            }
 
             @Override
             public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail d) { buatWeb(); muat(); return true; }
@@ -201,6 +226,7 @@ public class MainActivity extends Activity {
 
     private void muat() {
         if (!alamatSah(alamat)) return;
+        halamanSiap = false;
         web.getSettings().setCacheMode(adaInternet() ? WebSettings.LOAD_DEFAULT : WebSettings.LOAD_CACHE_ELSE_NETWORK);
         web.loadUrl(alamat);
     }
@@ -211,15 +237,43 @@ public class MainActivity extends Activity {
         return u != null && "https".equals(u.getScheme()) && a.getHost() != null && a.getHost().equalsIgnoreCase(u.getHost());
     }
 
-    private void tampilkanGagal() {
+    /** Halaman gagal dimuat: tampilkan pesan, lalu coba lagi otomatis 2 kali (jaringan sekolah sering padat
+     *  saat ratusan siswa membuka aplikasi bersamaan). */
+    private void gagalMuat(String ket) {
+        if (gagalKini && halamanGagal) return;   // kegagalan yang sama sudah ditangani (mis. sertifikat lalu galat jaringan)
+        gagalKini = true;
+        halamanSiap = false;
+        tampilkanGagal(ket);
+        if (ulangOtomatis < 2) {
+            ulangOtomatis++;
+            h.removeCallbacks(ulang);
+            h.postDelayed(ulang, 2500L * ulangOtomatis);
+        }
+    }
+
+    private final Runnable ulang = new Runnable() {
+        @Override
+        public void run() { muat(); }
+    };
+
+    private void tampilkanGagal(String ket) {
         halamanGagal = true;
+        String k = ket == null ? "" : ket;
+        String besar = k.toUpperCase();
+        boolean jam = k.contains("sertifikat") || besar.contains("CERT") || besar.contains("SSL");
+        String saran = jam ? "Periksa tanggal dan jam di HP ini (aktifkan tanggal &amp; jam otomatis), lalu coba lagi."
+                : "Periksa koneksi internet, lalu coba lagi.";
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
                 + "<body style='font-family:sans-serif;padding:32px 24px;text-align:center;color:#1C2833;background:#F2F5F8;line-height:1.5'>"
-                + "<h2 style='font-size:20px'>Halaman ujian tidak bisa dibuka</h2><p style='color:#566574'>Periksa koneksi internet, lalu coba lagi.</p>"
+                + "<h2 style='font-size:20px'>Halaman ujian tidak bisa dibuka</h2><p style='color:#566574'>" + saran + "</p>"
+                + (ulangOtomatis < 2 ? "<p style='color:#8A97A5;font-size:14px'>Mencoba lagi otomatis...</p>" : "")
                 + "<button style='font-size:17px;padding:12px 28px;border-radius:10px;border:0;background:#2A5C8A;color:#fff' onclick='CBTAndroid.muatUlang()'>Coba lagi</button>"
+                + "<p style='color:#8A97A5;font-size:12px;margin-top:28px'>" + aman(k) + " - CBT Ujian " + VERSI + "</p>"
                 + "</body></html>";
         web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
+
+    private static String aman(String t) { return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"); }
 
     private void kirimKeHalaman(String t) {
         if (web != null) web.evaluateJavascript("window.dispatchEvent(new CustomEvent('cbt-app',{detail:{t:'" + t + "'}}))", null);
