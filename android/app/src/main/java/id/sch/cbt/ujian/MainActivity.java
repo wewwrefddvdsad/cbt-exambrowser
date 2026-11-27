@@ -60,7 +60,7 @@ import android.widget.TextView;
  * Isi-otomatis (autofill) & tawaran "simpan sandi" Google dimatikan untuk seluruh aplikasi.
  */
 public class MainActivity extends Activity {
-    static final String VERSI = "1.2";
+    static final String VERSI = "1.3";
     private static final String PREF = "cbt";
 
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -77,6 +77,8 @@ public class MainActivity extends Activity {
     private boolean dialogTerbuka = false;
     private boolean pernahTersemat = false;
     private boolean izinDitanya = false;
+    private volatile boolean izinDibuka = false;     // setelan "tampil di atas aplikasi lain" sudah dibukakan sekali
+    private volatile boolean izinMungkin = true;     // izin itu bisa diberikan di HP ini (tidak di Android Go / tanpa setelannya)
     private long jedaPin = 0;               // tunggu sebelum meminta sematan lagi (dialog sistem sedang tampil)
     private long hilangFokus = 0;
     private View lapisan;                   // lapisan mengambang saat siswa keluar dari aplikasi
@@ -107,6 +109,7 @@ public class MainActivity extends Activity {
         buatWeb();
         alamat = pref.getString("alamat", getString(R.string.alamat_ujian));
         if (!alamatSah(alamat)) mintaAlamat(); else muat();
+        izinMungkin = !hpRinganAndroidGo();
         mintaIzinMengambang(false);
     }
 
@@ -285,6 +288,9 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String siap() {
             if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(MainActivity.this)) return "ya";
+            // Izin tidak bisa diberikan di HP ini (Android Go, sebagian Redmi/OPPO), atau setelannya sudah
+            // dibukakan sekali: ujian TIDAK dihalangi. Sematan layar, blokir tangkapan layar & catatan keluar tetap aktif.
+            if (!izinMungkin || izinDibuka) return "ya";
             h.post(() -> mintaIzinMengambang(true));
             return "tidak";
         }
@@ -478,28 +484,71 @@ public class MainActivity extends Activity {
     }
 
     // ------------------------------------------------------------------ izin, alamat, lain-lain
-    /** Izin "Tampil di atas aplikasi lain": untuk lapisan mengambang & membawa aplikasi kembali ke depan. */
+    /** Izin "Tampil di atas aplikasi lain": untuk lapisan mengambang & membawa aplikasi kembali ke depan.
+     *  Hanya pelengkap: bila tidak bisa diberikan, ujian tetap berjalan. */
     private void mintaIzinMengambang(boolean langsung) {
-        if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) return;
+        if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this) || !izinMungkin) return;
         if (langsung) { bukaSetelanMengambang(); return; }
         if (izinDitanya) return;
         izinDitanya = true;
         dialogTerbuka = true;
         new AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
                 .setTitle("Izinkan tampil di atas aplikasi lain")
-                .setMessage("CBT Ujian memerlukan izin \"Tampil di atas aplikasi lain\" agar tetap terkunci selama ujian. Pada layar berikutnya, pilih CBT Ujian lalu aktifkan izinnya.")
+                .setMessage(saranIzin())
                 .setPositiveButton("Buka setelan", (d, i) -> bukaSetelanMengambang())
                 .setNegativeButton("Nanti", null)
                 .setOnDismissListener(d -> dialogTerbuka = false)
                 .show();
     }
 
+    private String saranIzin() {
+        String m = (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase(java.util.Locale.ROOT);
+        String umum = "CBT Ujian memerlukan izin \"Tampil di atas aplikasi lain\" agar tetap terkunci selama ujian. ";
+        if (m.contains("xiaomi") || m.contains("redmi") || m.contains("poco"))
+            return umum + "Pada layar berikutnya aktifkan \"Tampilkan jendela pop-up\" dan \"Tampilkan jendela pop-up saat berjalan di latar belakang\" "
+                    + "(di menu Izin lainnya), lalu kembali ke CBT Ujian.";
+        if (m.contains("oppo") || m.contains("realme") || m.contains("oneplus"))
+            return umum + "Pada layar berikutnya pilih CBT Ujian, aktifkan \"Izinkan tampil di atas aplikasi lain\" (atau \"Jendela mengambang\"), lalu kembali ke CBT Ujian.";
+        if (m.contains("vivo") || m.contains("iqoo"))
+            return umum + "Pada layar berikutnya pilih CBT Ujian, aktifkan \"Tampilan jendela mengambang\", lalu kembali ke CBT Ujian.";
+        return umum + "Pada layar berikutnya pilih CBT Ujian lalu aktifkan izinnya, kemudian kembali ke CBT Ujian.";
+    }
+
+    /** Buka setelan izin. Redmi/Xiaomi/POCO memakai layar izin MIUI/HyperOS (langsung ke CBT Ujian);
+     *  merek lain memakai setelan Android. Bila tidak ada satu pun yang bisa dibuka, izin dianggap tidak tersedia. */
     private void bukaSetelanMengambang() {
-        try {
-            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
-        } catch (Exception e) {
-            try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); } catch (Exception e2) { /* tidak ada */ }
+        String m = (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase(java.util.Locale.ROOT);
+        Uri paket = Uri.parse("package:" + getPackageName());
+        java.util.List<Intent> coba = new java.util.ArrayList<>();
+        if (m.contains("xiaomi") || m.contains("redmi") || m.contains("poco")) {
+            Intent a = new Intent("miui.intent.action.APP_PERM_EDITOR");
+            a.setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity");
+            a.putExtra("extra_pkgname", getPackageName());
+            coba.add(a);
+            Intent b = new Intent("miui.intent.action.APP_PERM_EDITOR");
+            b.setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.AppPermissionsEditorActivity");
+            b.putExtra("extra_pkgname", getPackageName());
+            coba.add(b);
         }
+        coba.add(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, paket));
+        coba.add(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+        coba.add(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, paket));
+        for (Intent i : coba) {
+            try {
+                startActivity(i);
+                izinDibuka = true;
+                return;
+            } catch (Exception e) { /* layar ini tidak ada di HP ini: coba berikutnya */ }
+        }
+        izinMungkin = false;   // tidak ada setelan yang bisa dibuka: ujian tetap boleh dimulai
+    }
+
+    /** Android Go (HP RAM kecil, mis. sebagian Redmi A / OPPO A): Android 10+ tidak mengizinkan aplikasi tampil di atas aplikasi lain. */
+    private boolean hpRinganAndroidGo() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            return Build.VERSION.SDK_INT >= 29 && am != null && am.isLowRamDevice();
+        } catch (Exception e) { return false; }
     }
 
     private boolean alamatSah(String a) {
